@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhishGuard</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+</head>
+
+<body class="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat p-6"
+    style="background-image: url('https://www.ssldragon.com/wp-content/uploads/2024/09/Phishing-concept-pic.webp');">
+
+    <div class="bg-gray-800 shadow-xl rounded-lg max-w-2xl w-full p-8 space-y-6">
+
+        <!-- Header Section -->
+        <header class="text-center">
+            <img src="pg-logo-monogram-isolated-with-shield-and-crown-vector-31684928.jpg" alt="PhishGuard Logo"
+                class="mx-auto h-16 mb-4"> <!-- Placeholder Logo -->
+            <h1 class="text-yellow-400 text-4xl font-extrabold">PhishGuard</h1>
+            <p class="text-sm font-medium tracking-wide text-gray-300">Phishing Email Detection System</p>
+        </header>
+
+        <!-- Email Input -->
+        <textarea id="emailText" rows="10" placeholder="Paste your email here..."
+            class="w-full p-4 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400"></textarea>
+
+        <!-- Check Button -->
+        <div class="flex justify-center">
+            <button onclick="checkEmail()"
+                class="bg-yellow-400 hover:bg-green-500 hover:text-white text-red-800 font-bold py-2 px-6 rounded transition ease-in-out duration-300 transform hover:scale-105">
+                Check Email
+            </button>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="flex justify-center hidden">
+            <div class="animate-spin h-8 w-8 border-4 border-yellow-300 border-t-transparent rounded-full"></div>
+        </div>
+
+        <!-- Prediction Result -->
+        <p id="result" class="text-center text-2xl font-semibold mt-4"></p>
+
+        <!-- REPORT -->
+        <button id="downloadReportBtn" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hidden">
+            📄 Download PDF Report
+        </button>
+
+        <!-- Prediction Feedback -->
+        <div id="feedback" class="text-center text-xl font-medium mt-2"></div>
+
+        <!-- Scan Time -->
+        <p id="scanTime" class="text-gray-300 text-center text-sm mt-2"></p>
+
+        <!-- Footer -->
+        <footer class="text-center mt-6 text-sm text-gray-400">
+            <p>Cybersecurity Capstone Project | Pace University New York</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("downloadReportBtn").addEventListener("click", generatePDFReport);
+        });
+
+        function checkEmail() {
+            const emailText = document.getElementById("emailText").value.trim();
+            const resultElement = document.getElementById("result");
+            const loadingElement = document.getElementById("loading");
+            const feedbackElement = document.getElementById("feedback");
+
+            if (!emailText) {
+                alert("Please paste email text to check.");
+                return;
+            }
+
+            loadingElement.classList.remove("hidden");
+            resultElement.innerText = "";
+            feedbackElement.innerText = "";
+
+            fetch("http://127.0.0.1:5000/predict", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email_text: emailText })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const prediction = data.prediction;
+                    const phishingPercent = data.phishing_probability;
+                    const safePercent = data.safe_probability;
+
+                    resultElement.innerText = `Final Prediction: ${prediction}`;
+
+                    let confidenceText = "";
+                    if (prediction === "Safe") {
+                        confidenceText = `Safe: ${safePercent}%`;
+                        resultElement.className = "text-green-400 text-center text-2xl font-semibold";
+                        feedbackElement.className = "text-green-400 text-center text-xl font-medium mt-2";
+                    } else {
+                        confidenceText = `Phishing: ${phishingPercent}%`;
+                        resultElement.className = "text-red-500 text-center text-2xl font-semibold";
+                        feedbackElement.className = "text-red-500 text-center text-xl font-medium mt-2";
+                    }
+
+                    feedbackElement.innerText = confidenceText;
+
+                    const now = new Date();
+                    const scanTime = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()} ${now.toLocaleTimeString()}`;
+
+                    //const scanTime = now.toLocaleString();
+                    document.getElementById("scanTime").innerText = `Scanned on: ${scanTime}`;
+
+                    document.getElementById("downloadReportBtn").classList.remove("hidden");
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    resultElement.innerText = "Error processing request.";
+                    resultElement.className = "text-red-500 text-center text-2xl font-semibold";
+                })
+                .finally(() => {
+                    loadingElement.classList.add("hidden");
+                });
+        }
+
+        function generatePDFReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const emailContent = document.getElementById("emailText").value;
+            const prediction = document.getElementById("result").innerText.replace("Final Prediction: ", "");
+            const feedback = document.getElementById("feedback").innerText;
+            const scanTime = document.getElementById("scanTime").innerText;
+
+            doc.setFontSize(16);
+            doc.text("Phishing Detection Report", 20, 20);
+
+            doc.setFontSize(12);
+            doc.text(scanTime, 20, 30);
+            doc.text("Prediction: " + prediction, 20, 40);
+            doc.text("Confidence Score: " + feedback, 20, 50);  // only one line
+
+            doc.text("Email Content:", 20, 60);
+            doc.setFont("courier", "normal");
+            doc.setFontSize(10);
+
+            const lines = doc.splitTextToSize(emailContent, 170);
+            doc.text(lines, 20, 70);
+
+            doc.save("Phishing_Report.pdf");
+        }
+
+    </script>
+
+</body>
+
+</html>
